@@ -37,15 +37,36 @@ class OpenAiAudioApi {
       };
 
   /// POST /audio/transcriptions (multipart).
-  Future<String> transcribeWavFile(String filePath) async {
-    final form = FormData.fromMap({
+  ///
+  /// [language]:
+  /// - `null`: se envía [OpenAiConfig.whisperLanguage] (p. ej. `es` para comandos).
+  /// - `''`: no se envía el campo; Whisper **autodetecta** (recomendado para el barrido
+  ///   de la wake phrase si mezclas idiomas).
+  /// - otro valor: ISO-639-1 explícito.
+  ///
+  /// Si no hay voz reconocible, la API puede devolver `text` vacío: se devuelve `''`
+  /// (no se lanza error; el llamador decide).
+  Future<String> transcribeWavFile(
+    String filePath, {
+    String? language,
+  }) async {
+    final map = <String, dynamic>{
       'model': OpenAiConfig.whisperModel,
-      'language': OpenAiConfig.whisperLanguage,
       'file': await MultipartFile.fromFile(
         filePath,
         filename: 'audio.wav',
       ),
-    });
+    };
+    if (language == null) {
+      final l = OpenAiConfig.whisperLanguage;
+      if (l.isNotEmpty) {
+        map['language'] = l;
+      }
+    } else if (language.isNotEmpty) {
+      map['language'] = language;
+    }
+
+    final form = FormData.fromMap(map);
     try {
       final res = await _dio.post<Map<String, dynamic>>(
         '/audio/transcriptions',
@@ -63,10 +84,7 @@ class OpenAiAudioApi {
         );
       }
       final text = res.data?['text'] as String?;
-      if (text == null || text.trim().isEmpty) {
-        throw const OpenAiApiException('Whisper devolvió texto vacío');
-      }
-      return text.trim();
+      return (text ?? '').trim();
     } on DioException catch (e) {
       throw OpenAiApiException(_dioErr(e), statusCode: e.response?.statusCode);
     }

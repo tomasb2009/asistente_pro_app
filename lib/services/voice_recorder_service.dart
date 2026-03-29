@@ -8,6 +8,10 @@ class VoiceRecorderService {
   final AudioRecorder _recorder;
   String? _currentPath;
 
+  /// Nivel de audio (dBFS) para VAD / silencio; solo mientras graba.
+  Stream<Amplitude> onAmplitudeChanged(Duration interval) =>
+      _recorder.onAmplitudeChanged(interval);
+
   Future<bool> hasPermission() => _recorder.hasPermission();
 
   Future<String> newRecordingPath() async {
