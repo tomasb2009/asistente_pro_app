@@ -17,18 +17,26 @@ class _AppShellState extends State<AppShell> {
 
   static const _titles = ['Domótica', 'Hablar', 'Ajustes'];
 
+  static const _switchDuration = Duration(milliseconds: 280);
+
   @override
   Widget build(BuildContext context) {
+    final w = MediaQuery.sizeOf(context).width;
+    final safeW = (!w.isFinite || w <= 0) ? 1100.0 : w;
+    final railExtended = safeW >= 1100;
+
     return Scaffold(
       body: Row(
         children: [
+          // Sin ancho fijo: si no, el rail compite con el SizedBox y la animación
+          // extended se ve entrecortada. El propio NavigationRail anima 200 ms (tema).
           NavigationRail(
-            extended: MediaQuery.sizeOf(context).width >= 1100,
+            extended: railExtended,
             backgroundColor: AppTheme.backgroundAlt,
             selectedIndex: _index,
             onDestinationSelected: (i) => setState(() => _index = i),
-            labelType: MediaQuery.sizeOf(context).width >= 1100
-                ? NavigationRailLabelType.all
+            labelType: railExtended
+                ? NavigationRailLabelType.none
                 : NavigationRailLabelType.selected,
             leading: Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
@@ -64,9 +72,30 @@ class _AppShellState extends State<AppShell> {
                     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
                     child: Row(
                       children: [
-                        Text(
-                          _titles[_index],
-                          style: Theme.of(context).textTheme.titleLarge,
+                        AnimatedSwitcher(
+                          duration: _switchDuration,
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeInCubic,
+                          transitionBuilder: (child, animation) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: SlideTransition(
+                                position: Tween<Offset>(
+                                  begin: const Offset(0, 0.06),
+                                  end: Offset.zero,
+                                ).animate(CurvedAnimation(
+                                  parent: animation,
+                                  curve: Curves.easeOutCubic,
+                                )),
+                                child: child,
+                              ),
+                            );
+                          },
+                          child: Text(
+                            _titles[_index],
+                            key: ValueKey<String>(_titles[_index]),
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
                         ),
                         const Spacer(),
                         Text(
@@ -82,12 +111,44 @@ class _AppShellState extends State<AppShell> {
                 const Divider(height: 1),
                 Expanded(
                   child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 220),
-                    child: switch (_index) {
-                      0 => const DashboardPage(key: ValueKey('d')),
-                      1 => const VoicePage(key: ValueKey('v')),
-                      _ => const SettingsPage(key: ValueKey('s')),
+                    duration: _switchDuration,
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    layoutBuilder: (currentChild, previousChildren) {
+                      return Stack(
+                        alignment: Alignment.topCenter,
+                        fit: StackFit.expand,
+                        children: <Widget>[
+                          ...previousChildren,
+                          ?currentChild,
+                        ],
+                      );
                     },
+                    transitionBuilder: (child, animation) {
+                      final curved = CurvedAnimation(
+                        parent: animation,
+                        curve: Curves.easeOutCubic,
+                        reverseCurve: Curves.easeInCubic,
+                      );
+                      return FadeTransition(
+                        opacity: curved,
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(0.015, 0),
+                            end: Offset.zero,
+                          ).animate(curved),
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: KeyedSubtree(
+                      key: ValueKey<int>(_index),
+                      child: switch (_index) {
+                        0 => const DashboardPage(),
+                        1 => const VoicePage(),
+                        _ => const SettingsPage(),
+                      },
+                    ),
                   ),
                 ),
               ],
