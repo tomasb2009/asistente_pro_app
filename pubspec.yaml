@@ -1,0 +1,28 @@
+name: asistente_pro_app
+description: "Cliente de escritorio para el asistente personal (FastAPI)."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.11.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+  dio: ^5.8.0+1
+  flutter_riverpod: ^2.6.1
+  shared_preferences: ^2.5.3
+  window_manager: ^0.5.1
+  intl: ^0.20.2
+  record: ^6.0.0
+  path_provider: ^2.1.5
+  audioplayers: ^6.5.0
+  flutter_dotenv: ^6.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
