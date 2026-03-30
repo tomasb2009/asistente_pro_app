@@ -5,7 +5,7 @@ import 'package:record/record.dart';
 class VoiceRecorderService {
   VoiceRecorderService() : _recorder = AudioRecorder();
 
-  final AudioRecorder _recorder;
+  AudioRecorder _recorder;
   String? _currentPath;
 
   /// Nivel de audio (dBFS) para VAD / silencio; solo mientras graba.
@@ -21,21 +21,61 @@ class VoiceRecorderService {
   }
 
   Future<void> start(String path) async {
-    await _recorder.start(
-      const RecordConfig(
-        encoder: AudioEncoder.wav,
-        sampleRate: 16000,
-        numChannels: 1,
-      ),
-      path: path,
-    );
+    try {
+      if (await _recorder.isRecording() || await _recorder.isPaused()) {
+        await _recorder.stop();
+      }
+      await _recorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.wav,
+          sampleRate: 16000,
+          numChannels: 1,
+        ),
+        path: path,
+      );
+    } on StateError {
+      // El plugin puede quedar en mal estado tras una secuencia rápida start/stop.
+      await _recreateRecorder();
+      await _recorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.wav,
+          sampleRate: 16000,
+          numChannels: 1,
+        ),
+        path: path,
+      );
+    }
   }
 
-  Future<String?> stop() => _recorder.stop();
+  Future<String?> stop() async {
+    try {
+      if (!await _recorder.isRecording() && !await _recorder.isPaused()) {
+        return _currentPath;
+      }
+      return _recorder.stop();
+    } on StateError {
+      await _recreateRecorder();
+      return _currentPath;
+    }
+  }
 
-  Future<void> cancel() => _recorder.cancel();
+  Future<void> cancel() async {
+    try {
+      if (!await _recorder.isRecording() && !await _recorder.isPaused()) return;
+      await _recorder.cancel();
+    } on StateError {
+      await _recreateRecorder();
+    }
+  }
 
   Future<void> dispose() async {
     await _recorder.dispose();
+  }
+
+  Future<void> _recreateRecorder() async {
+    try {
+      await _recorder.dispose();
+    } catch (_) {}
+    _recorder = AudioRecorder();
   }
 }

@@ -171,13 +171,48 @@ class JarvisWakeSession {
 
       DateTime? quietSince;
       final started = DateTime.now();
+      double? noiseFloorDb;
+      double? speechPeakDb;
+      var adaptiveThresholdDb = JarvisVoiceConfig.vadFallbackSpeechDb;
       final ampSub = recorder
           .onAmplitudeChanged(const Duration(milliseconds: 100))
           .listen((amp) {
-        // Importante: usar `current` (nivel por chunk). En Windows `max` es el pico
-        // acumulado de la sesión y no baja → el silencio nunca se detectaba.
-        final speech =
-            amp.current > JarvisVoiceConfig.commandSpeechActivityMinDb;
+        // VAD adaptativo por comando:
+        // 1) estima ruido ambiente (noiseFloorDb)
+        // 2) estima pico de voz local (speechPeakDb)
+        // 3) umbral dinámico entre ambos
+        final currentDb = amp.current;
+        noiseFloorDb ??= currentDb;
+        speechPeakDb ??= currentDb;
+
+        final prevNoise = noiseFloorDb!;
+        // Si baja, ajusta rápido (ruido real); si sube, ajusta lento (evita "comerse" la voz).
+        noiseFloorDb = currentDb < prevNoise
+            ? (prevNoise * 0.65 + currentDb * 0.35)
+            : (prevNoise * 0.93 + currentDb * 0.07);
+
+        final prevSpeech = speechPeakDb!;
+        // Sube rápido con voz; baja lento para no perder referencia al terminar sílabas.
+        speechPeakDb = currentDb > prevSpeech
+            ? currentDb
+            : (prevSpeech * 0.92 + currentDb * 0.08);
+
+        final dynamicDelta = (speechPeakDb! - noiseFloorDb!) *
+            JarvisVoiceConfig.vadThresholdVoiceRatio;
+        final clampedDelta = dynamicDelta < JarvisVoiceConfig.vadMinDeltaDb
+            ? JarvisVoiceConfig.vadMinDeltaDb
+            : dynamicDelta;
+        adaptiveThresholdDb = noiseFloorDb! + clampedDelta;
+        if (adaptiveThresholdDb > JarvisVoiceConfig.vadMaxThresholdDb) {
+          adaptiveThresholdDb = JarvisVoiceConfig.vadMaxThresholdDb;
+        }
+
+        final elapsedMs = DateTime.now().difference(started).inMilliseconds;
+        final readyForAdaptive = elapsedMs >= JarvisVoiceConfig.vadCalibrationMs;
+        final threshold = readyForAdaptive
+            ? adaptiveThresholdDb
+            : JarvisVoiceConfig.vadFallbackSpeechDb;
+        final speech = currentDb >= threshold;
         if (speech) {
           quietSince = null;
         } else {

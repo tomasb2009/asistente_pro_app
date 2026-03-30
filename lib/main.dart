@@ -25,6 +25,7 @@ Future<void> main() async {
       minimumSize: Size(900, 600),
       center: true,
       title: 'Asistente Pro',
+      fullScreen: true,
     );
     await windowManager.waitUntilReadyToShow(options, () async {
       await windowManager.show();

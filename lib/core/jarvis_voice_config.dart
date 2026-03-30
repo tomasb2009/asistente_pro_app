@@ -14,10 +14,20 @@ class JarvisVoiceConfig {
   /// Mínimo de grabación antes de poder cortar por silencio (evita cortar el pitido).
   static const int minCommandRecordingMs = 500;
 
-  /// Nivel **instantáneo** (`Amplitude.current`, no `max`): en Windows `max` es pico acumulado
-  /// y se queda alto para siempre → el corte por silencio nunca ocurría.
-  /// Si `current` supera este dBFS se considera que hay voz (se reinicia el contador de silencio).
-  static const double commandSpeechActivityMinDb = -46;
+  /// Tiempo inicial para "calibrar" ruido/voz del entorno al empezar cada comando.
+  static const int vadCalibrationMs = 900;
+
+  /// Umbral adaptativo: porcentaje del rango [ruido..voz] usado para decidir "hay voz".
+  static const double vadThresholdVoiceRatio = 0.38;
+
+  /// Diferencia mínima entre ruido y umbral para evitar cortes falsos por ruido.
+  static const double vadMinDeltaDb = 6.0;
+
+  /// Límite superior del umbral adaptativo (más cerca de 0 = más estricto).
+  static const double vadMaxThresholdDb = -30.0;
+
+  /// Umbral de respaldo si todavía no hay buena calibración de voz.
+  static const double vadFallbackSpeechDb = -46.0;
 
   /// Wake word: **«ok asistente»**. Variantes: ok/okay/oye/okey y coma opcional.
   static final RegExp wakePhraseRegex = RegExp(

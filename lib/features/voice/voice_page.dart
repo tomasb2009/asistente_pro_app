@@ -38,13 +38,15 @@ class _VoicePageState extends ConsumerState<VoicePage> {
   bool _loading = false;
   bool _ttsPlaying = false;
   String? _error;
+  ProviderSubscription<String?>? _openAiKeySub;
 
   @override
   void dispose() {
     _manualController.dispose();
+    _openAiKeySub?.close();
     unawaited(_disposeJarvis());
     unawaited(_tts?.dispose() ?? Future.value());
-    _recorder.dispose();
+    unawaited(_recorder.dispose());
     super.dispose();
   }
 
@@ -59,6 +61,20 @@ class _VoicePageState extends ConsumerState<VoicePage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _startJarvisIfPossible());
+    _openAiKeySub = ref.listenManual<String?>(
+      openAiApiKeyProvider,
+      (prev, next) {
+        final had = (prev ?? '').isNotEmpty;
+        final has = (next ?? '').isNotEmpty;
+        if (!had && has) {
+          _startJarvisIfPossible();
+        } else if (had && !has) {
+          unawaited(_disposeJarvis().then((_) {
+            if (mounted) setState(() => _jarvisPhase = JarvisPhase.scanningWake);
+          }));
+        }
+      },
+    );
   }
 
   Future<void> _startJarvisIfPossible() async {
@@ -272,18 +288,6 @@ class _VoicePageState extends ConsumerState<VoicePage> {
   @override
   Widget build(BuildContext context) {
     final hasOpenAiKey = (ref.watch(openAiApiKeyProvider) ?? '').isNotEmpty;
-
-    ref.listen(openAiApiKeyProvider, (prev, next) {
-      final had = (prev ?? '').isNotEmpty;
-      final has = (next ?? '').isNotEmpty;
-      if (!had && has) {
-        _startJarvisIfPossible();
-      } else if (had && !has) {
-        unawaited(_disposeJarvis().then((_) {
-          if (mounted) setState(() => _jarvisPhase = JarvisPhase.scanningWake);
-        }));
-      }
-    });
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(28, 24, 28, 32),
