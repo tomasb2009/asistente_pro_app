@@ -1,0 +1,5 @@
+numpy>=1.26
+sounddevice>=0.4.6
+webrtcvad-wheels>=2.0.14
+vosk>=0.3.45
+

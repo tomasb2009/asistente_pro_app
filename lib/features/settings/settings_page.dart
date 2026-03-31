@@ -202,8 +202,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'En Hablar: escucha continua; di «ok asistente» y luego el mensaje. '
-                  'También puedes usar «Modo manual» sin la frase.',
+                  'En Hablar: sidecar open-source con wake word local. '
+                  'Di «ok asistente» y luego el mensaje; también puedes usar modo manual.',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],

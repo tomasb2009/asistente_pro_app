@@ -1,0 +1,12 @@
+{
+  "wake_phrase": "ok asistente",
+  "sample_rate_hz": 16000,
+  "frame_ms": 30,
+  "command_silence_ms": 1400,
+  "max_command_ms": 45000,
+  "pre_roll_ms": 350,
+  "post_roll_ms": 180,
+  "enable_rnnoise": true,
+  "enable_webrtc_vad": true
+}
+

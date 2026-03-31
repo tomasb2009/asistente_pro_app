@@ -1,16 +1,12 @@
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
-/// Graba WAV en disco para enviarlo a Whisper (OpenAI).
+/// Grabación manual WAV para enviarlo a Whisper (fallback al modo sidecar).
 class VoiceRecorderService {
   VoiceRecorderService() : _recorder = AudioRecorder();
 
   AudioRecorder _recorder;
   String? _currentPath;
-
-  /// Nivel de audio (dBFS) para VAD / silencio; solo mientras graba.
-  Stream<Amplitude> onAmplitudeChanged(Duration interval) =>
-      _recorder.onAmplitudeChanged(interval);
 
   Future<bool> hasPermission() => _recorder.hasPermission();
 
@@ -34,7 +30,6 @@ class VoiceRecorderService {
         path: path,
       );
     } on StateError {
-      // El plugin puede quedar en mal estado tras una secuencia rápida start/stop.
       await _recreateRecorder();
       await _recorder.start(
         const RecordConfig(
@@ -79,3 +74,4 @@ class VoiceRecorderService {
     _recorder = AudioRecorder();
   }
 }
+

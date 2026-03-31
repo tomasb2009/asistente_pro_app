@@ -103,6 +103,15 @@ install(CODE "
 install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
   DESTINATION "${INSTALL_BUNDLE_DATA_DIR}" COMPONENT Runtime)
 
+# Voice sidecar (OSS): script, config y dependencias de ejecución.
+set(VOICE_SIDECAR_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../native/voice_sidecar")
+install(DIRECTORY "${VOICE_SIDECAR_SRC_DIR}/"
+  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}/voice_sidecar"
+  COMPONENT Runtime
+  PATTERN "__pycache__" EXCLUDE
+  PATTERN "*.pyc" EXCLUDE
+  PATTERN ".venv" EXCLUDE)
+
 # Install the AOT library on non-Debug builds only.
 install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   CONFIGURATIONS Profile;Release

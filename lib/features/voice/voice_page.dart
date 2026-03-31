@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/jarvis_voice_config.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/providers.dart';
 import '../../services/jarvis_wake_session.dart';
@@ -39,6 +40,8 @@ class _VoicePageState extends ConsumerState<VoicePage> {
   bool _ttsPlaying = false;
   String? _error;
   ProviderSubscription<String?>? _openAiKeySub;
+  DateTime? _lastVoiceErrorSnackAt;
+  String? _lastVoiceErrorSnackText;
 
   @override
   void dispose() {
@@ -87,12 +90,28 @@ class _VoicePageState extends ConsumerState<VoicePage> {
     _feedbackSounds = VoiceFeedbackSounds();
     _jarvis = JarvisWakeSession(
       openAi: openAi,
-      recorder: _recorder,
       feedback: _feedbackSounds!,
-      onCommandText: (t) => _sendQuery(t),
+      onCommandText: (t) async {
+        if (mounted) {
+          setState(() => _lastHeard = t);
+        }
+        await _sendQuery(t);
+      },
       onError: (e, st) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
+        final text = e.toString();
+        final now = DateTime.now();
+        if (_lastVoiceErrorSnackText == text &&
+            _lastVoiceErrorSnackAt != null &&
+            now.difference(_lastVoiceErrorSnackAt!) <
+                const Duration(seconds: 4)) {
+          return;
+        }
+        _lastVoiceErrorSnackText = text;
+        _lastVoiceErrorSnackAt = now;
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.clearSnackBars();
+        messenger.showSnackBar(
           SnackBar(content: Text('Voz: $e')),
         );
       },
@@ -153,9 +172,7 @@ class _VoicePageState extends ConsumerState<VoicePage> {
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('No se pudo reproducir el audio (TTS): $e'),
-            ),
+            SnackBar(content: Text('No se pudo reproducir el audio (TTS): $e')),
           );
         }
       }
@@ -168,17 +185,15 @@ class _VoicePageState extends ConsumerState<VoicePage> {
     }
   }
 
-  /// Grabación manual sin wake phrase (pausa el barrido de «ok asistente»).
   Future<void> _toggleManualRecording() async {
     if (_loading || _transcribing) return;
-
     final openAi = ref.read(openAiAudioApiProvider);
     if (openAi == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Falta OPENAI_API_KEY: define OPENAI_API_KEY en el archivo .env (raíz del proyecto o junto al .exe).',
+            'Falta OPENAI_API_KEY en .env (raíz del proyecto o junto al .exe).',
           ),
         ),
       );
@@ -187,8 +202,10 @@ class _VoicePageState extends ConsumerState<VoicePage> {
 
     if (_recording) {
       _jarvis?.pauseScanning();
-      setState(() => _recording = false);
-      setState(() => _transcribing = true);
+      setState(() {
+        _recording = false;
+        _transcribing = true;
+      });
       try {
         final path = await _recorder.stop() ?? _recordingPath;
         _recordingPath = null;
@@ -209,7 +226,7 @@ class _VoicePageState extends ConsumerState<VoicePage> {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text(
-                  'Whisper no captó texto. Habla más cerca del micrófono o sube el volumen de entrada.',
+                  'Whisper no captó texto. Habla más cerca del micrófono.',
                 ),
               ),
             );
@@ -233,9 +250,7 @@ class _VoicePageState extends ConsumerState<VoicePage> {
     if (!ok) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Permiso de micrófono denegado.'),
-        ),
+        const SnackBar(content: Text('Permiso de micrófono denegado.')),
       );
       return;
     }
@@ -257,17 +272,13 @@ class _VoicePageState extends ConsumerState<VoicePage> {
   }
 
   String _statusLine(bool hasKey) {
-    if (!hasKey) {
-      return 'Sin OPENAI_API_KEY en .env: no hay voz por micrófono.';
-    }
-    if (_recording) {
-      return 'Modo manual: grabando… pulsa Detener para transcribir.';
-    }
+    if (!hasKey) return 'Sin OPENAI_API_KEY en .env: no hay voz por micrófono.';
+    if (_recording) return 'Modo manual: grabando… pulsa Detener para transcribir.';
     switch (_jarvisPhase) {
       case JarvisPhase.scanningWake:
-        return 'Escuchando siempre. Di «ok asistente» y luego tu mensaje. Se envía tras ~2 s de silencio o al límite de tiempo.';
+        return 'Sidecar activo. Di «${JarvisVoiceConfig.wakePhrase}» y luego tu mensaje.';
       case JarvisPhase.recordingCommand:
-        return 'Frase detectada: grabando tu mensaje…';
+        return 'Frase detectada: grabando comando…';
       case JarvisPhase.transcribingCommand:
         return 'Transcribiendo comando…';
     }
@@ -276,8 +287,7 @@ class _VoicePageState extends ConsumerState<VoicePage> {
   bool get _waveActive {
     if (_recording) return true;
     if (_jarvis == null) return false;
-    return _jarvisPhase == JarvisPhase.recordingCommand ||
-        _jarvisPhase == JarvisPhase.scanningWake;
+    return _jarvisPhase != JarvisPhase.transcribingCommand;
   }
 
   bool get _jarvisMicBusy {
@@ -294,17 +304,12 @@ class _VoicePageState extends ConsumerState<VoicePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Hablar',
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
+          Text('Hablar', style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 8),
           Text(
             _statusLine(hasOpenAiKey),
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: hasOpenAiKey
-                      ? AppTheme.textSecondary
-                      : Colors.orangeAccent,
+                  color: hasOpenAiKey ? AppTheme.textSecondary : Colors.orangeAccent,
                 ),
           ),
           const SizedBox(height: 24),
@@ -319,14 +324,10 @@ class _VoicePageState extends ConsumerState<VoicePage> {
                   Row(
                     children: [
                       FilledButton.tonalIcon(
-                        onPressed: (_loading ||
-                                _transcribing ||
-                                (_jarvisMicBusy && !_recording))
+                        onPressed: (_loading || _transcribing || (_jarvisMicBusy && !_recording))
                             ? null
                             : _toggleManualRecording,
-                        icon: Icon(
-                          _recording ? Icons.stop_rounded : Icons.mic_none_rounded,
-                        ),
+                        icon: Icon(_recording ? Icons.stop_rounded : Icons.mic_none_rounded),
                         label: Text(_recording ? 'Detener' : 'Modo manual'),
                       ),
                       const SizedBox(width: 12),
@@ -335,29 +336,18 @@ class _VoicePageState extends ConsumerState<VoicePage> {
                           padding: EdgeInsets.only(left: 8),
                           child: Text('Transcribiendo con Whisper…'),
                         ),
-                      if (_intent != null)
-                        Chip(
-                          label: Text('intent: $_intent'),
-                        ),
+                      if (_intent != null) Chip(label: Text('intent: $_intent')),
                     ],
                   ),
                   const SizedBox(height: 20),
-                  Text(
-                    'Entendido (Whisper)',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
+                  Text('Entendido (Whisper)', style: Theme.of(context).textTheme.titleSmall),
                   const SizedBox(height: 6),
                   Text(
-                    _recording
-                        ? 'Grabando (manual)…'
-                        : (_lastHeard.isEmpty ? '—' : _lastHeard),
+                    _recording ? 'Grabando (manual)…' : (_lastHeard.isEmpty ? '—' : _lastHeard),
                     style: Theme.of(context).textTheme.bodyLarge,
                   ),
                   const SizedBox(height: 20),
-                  Text(
-                    'Respuesta',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
+                  Text('Respuesta', style: Theme.of(context).textTheme.titleSmall),
                   const SizedBox(height: 6),
                   if (_error != null)
                     Text(_error!, style: const TextStyle(color: Colors.redAccent))
@@ -389,18 +379,13 @@ class _VoicePageState extends ConsumerState<VoicePage> {
             ),
           ),
           const SizedBox(height: 20),
-          Text(
-            'O escribe el mensaje',
-            style: Theme.of(context).textTheme.titleSmall,
-          ),
+          Text('O escribe el mensaje', style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),
           TextField(
             controller: _manualController,
             minLines: 1,
             maxLines: 4,
-            decoration: const InputDecoration(
-              hintText: 'Pregunta al asistente…',
-            ),
+            decoration: const InputDecoration(hintText: 'Pregunta al asistente…'),
             onSubmitted: (_) => _sendQuery(_manualController.text),
           ),
           const SizedBox(height: 12),
@@ -417,3 +402,4 @@ class _VoicePageState extends ConsumerState<VoicePage> {
     );
   }
 }
+
