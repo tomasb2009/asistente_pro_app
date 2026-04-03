@@ -1,5 +1,5 @@
 name: asistente_pro_app
-description: "Cliente de escritorio para el asistente personal (FastAPI)."
+description: "Cliente Flutter del asistente personal (FastAPI): Windows y Android."
 publish_to: 'none'
 version: 0.1.0+1
 
@@ -26,3 +26,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # Incluido en el APK/IPA; en build debe existir `.env` en la raíz del proyecto
+  # (aunque esté en .gitignore). Sin ese archivo, `flutter build` fallará al empaquetar.
+  assets:
+    - .env

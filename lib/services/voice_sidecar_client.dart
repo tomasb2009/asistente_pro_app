@@ -22,6 +22,15 @@ class VoiceSidecarClient {
   Future<void> start() async {
     if (_proc != null) return;
 
+    if (kIsWeb ||
+        defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS) {
+      throw UnsupportedError(
+        'El sidecar de wake word (proceso nativo) no está disponible en esta plataforma. '
+        'En móvil usa «Modo manual» o escribe el mensaje.',
+      );
+    }
+
     final launch = await _resolveLaunch();
     final proc = await Process.start(
       launch.exec,

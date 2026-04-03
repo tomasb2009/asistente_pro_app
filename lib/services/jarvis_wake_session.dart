@@ -71,6 +71,9 @@ class JarvisWakeSession {
       _eventsSub = _sidecar.events.listen((event) {
         unawaited(_handleEvent(event));
       });
+    } on UnsupportedError catch (e, st) {
+      if (_disposed) return;
+      onError(e, st);
     } catch (e, st) {
       if (_disposed) return;
       onError(e, st);

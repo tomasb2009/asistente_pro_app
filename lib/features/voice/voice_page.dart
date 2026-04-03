@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/jarvis_voice_config.dart';
+import '../../core/voice_platform.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/providers.dart';
 import '../../services/jarvis_wake_session.dart';
@@ -83,6 +84,10 @@ class _VoicePageState extends ConsumerState<VoicePage> {
   Future<void> _startJarvisIfPossible() async {
     final openAi = ref.read(openAiAudioApiProvider);
     if (openAi == null || !mounted) return;
+    if (!voiceSidecarSupported) {
+      if (mounted) setState(() {});
+      return;
+    }
     final ok = await _recorder.hasPermission();
     if (!ok || !mounted) return;
 
@@ -272,7 +277,15 @@ class _VoicePageState extends ConsumerState<VoicePage> {
   }
 
   String _statusLine(bool hasKey) {
-    if (!hasKey) return 'Sin OPENAI_API_KEY en .env: no hay voz por micrófono.';
+    if (!hasKey) {
+      return 'Sin OPENAI_API_KEY: configura .env, variable de entorno o --dart-define=OPENAI_API_KEY=…';
+    }
+    if (!voiceSidecarSupported) {
+      if (_recording) {
+        return 'Modo manual: grabando… pulsa Detener para transcribir.';
+      }
+      return 'Móvil: usa «Modo manual» o escribe abajo. La frase de activación «${JarvisVoiceConfig.wakePhrase}» está disponible en escritorio.';
+    }
     if (_recording) return 'Modo manual: grabando… pulsa Detener para transcribir.';
     switch (_jarvisPhase) {
       case JarvisPhase.scanningWake:
